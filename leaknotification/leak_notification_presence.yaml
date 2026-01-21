@@ -1,0 +1,81 @@
+blueprint:
+  name: Notify on Leak (With Presence Check)
+  description: >
+    Sends a push notification immediately upon leak detection. 
+    Plays a TTS announcement ONLY if specified people are home.
+  domain: automation
+  input:
+    leak_sensor:
+      name: Water Leak Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: moisture
+    notify_device:
+      name: Mobile Device to Notify
+      description: The phone that will receive the push notification (always).
+      selector:
+        device:
+          integration: mobile_app
+    people_to_check:
+      name: Residents (Presence Check)
+      description: TTS will only play if one or more of these people are home.
+      default: []
+      selector:
+        entity:
+          domain: person
+          multiple: true
+    speakers:
+      name: TTS Speakers
+      description: Select devices for the audio warning.
+      selector:
+        target:
+          entity:
+            domain: media_player
+    notification_title:
+      name: Notification Title
+      default: "Water Leak Detected"
+      selector:
+        text:
+    notification_message:
+      name: Notification Message
+      default: "A water leak has been detected. Please check immediately."
+      selector:
+        text:
+    tts_message:
+      name: TTS Audio Message
+      default: "Warning. Water leak detected. Please check immediately."
+      selector:
+        text:
+
+# Map inputs to variables to use them in templates
+variables:
+  people_var: !input people_to_check
+
+trigger:
+  - platform: state
+    entity_id: !input leak_sensor
+    to: "on"
+    from: "off"
+    for:
+      seconds: 5
+
+action:
+  # 1. Always send Mobile Notification
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: !input notification_title
+    message: !input notification_message
+
+  # 2. Check if anyone is home before playing audio
+  - if:
+      - condition: template
+        value_template: >
+          {{ expand(people_var) | selectattr('state', 'eq', 'home') | list | count > 0 }}
+    then:
+      - service: tts.cloud_say
+        target: !input speakers
+        data:
+          cache: false
+          message: !input tts_message
