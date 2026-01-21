@@ -1,8 +1,10 @@
 blueprint:
-  name: Notify on Leak (With Presence Check)
+  name: Leak Alert (Action Selector)
   description: >
-    Sends a push notification immediately upon leak detection. 
-    Plays a TTS announcement ONLY if specified people are home.
+    Triggered by a leak sensor.
+    1. Runs your custom Notification Actions (add your phones here).
+    2. Checks if Residents are home.
+    3. If home, plays TTS on selected speakers.
   domain: automation
   input:
     leak_sensor:
@@ -11,12 +13,17 @@ blueprint:
         entity:
           domain: binary_sensor
           device_class: moisture
-    notify_device:
-      name: Mobile Device to Notify
-      description: The phone that will receive the push notification (always).
+    
+    # THE FIX: This lets you use the standard UI buttons to find your phone
+    notification_actions:
+      name: Notification Actions
+      description: >
+        Click 'Add Action' below. Search for "Notify" and pick your specific phone 
+        (e.g., 'Notifications: Send to mobile_app_fold7').
+        You can add multiple devices here.
       selector:
-        device:
-          integration: mobile_app
+        action: {}
+
     people_to_check:
       name: Residents (Presence Check)
       description: TTS will only play if one or more of these people are home.
@@ -25,30 +32,21 @@ blueprint:
         entity:
           domain: person
           multiple: true
+    
     speakers:
       name: TTS Speakers
-      description: Select devices for the audio warning.
+      description: Select speakers for the audio warning.
       selector:
         target:
           entity:
             domain: media_player
-    notification_title:
-      name: Notification Title
-      default: "Water Leak Detected"
-      selector:
-        text:
-    notification_message:
-      name: Notification Message
-      default: "A water leak has been detected. Please check immediately."
-      selector:
-        text:
+            
     tts_message:
       name: TTS Audio Message
       default: "Warning. Water leak detected. Please check immediately."
       selector:
         text:
 
-# Map inputs to variables to use them in templates
 variables:
   people_var: !input people_to_check
 
@@ -61,14 +59,11 @@ trigger:
       seconds: 5
 
 action:
-  # 1. Always send Mobile Notification
-  - domain: mobile_app
-    type: notify
-    device_id: !input notify_device
-    title: !input notification_title
-    message: !input notification_message
+  # 1. Run the custom actions you defined in the UI (Phones, SMS, etc.)
+  - choose: []
+    default: !input notification_actions
 
-  # 2. Check if anyone is home before playing audio
+  # 2. Check Presence & Play TTS
   - if:
       - condition: template
         value_template: >
