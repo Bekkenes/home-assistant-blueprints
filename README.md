@@ -14,6 +14,9 @@ A robust automation that handles mobile notifications and smart speaker announce
 * **Presence Awareness:** Smart speakers (TTS) will **only** announce the warning if someone is actually home.
 * **Multi-Device:** Supports notifying multiple phones and playing audio on multiple speakers simultaneously.
 * **Safety Delay:** Includes a short delay (e.g., 5s) to prevent false positives from sensor flickers.
+* **Any TTS engine:** Uses `tts.speak`, so you can pick Home Assistant Cloud, Piper or any other TTS entity.
+
+Requires Home Assistant 2024.10 or newer.
 
 ## How to Use
 1.  Click on the blueprint file you want to use (e.g., `leak_notification.yaml`).

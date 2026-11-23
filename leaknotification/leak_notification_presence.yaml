@@ -6,6 +6,9 @@ blueprint:
     2. Checks if Residents are home.
     3. If home, plays TTS on selected speakers.
   domain: automation
+  source_url: https://github.com/Bekkenes/home-assistant-blueprints/blob/main/leaknotification/leak_notification_presence.yaml
+  homeassistant:
+    min_version: 2024.10.0
   input:
     leak_sensor:
       name: Water Leak Sensor
@@ -41,6 +44,14 @@ blueprint:
           entity:
             domain: media_player
             
+    tts_engine:
+      name: TTS Engine
+      description: Text-to-speech engine to use (Home Assistant Cloud by default).
+      default: tts.home_assistant_cloud
+      selector:
+        entity:
+          domain: tts
+
     tts_message:
       name: TTS Audio Message
       default: "Warning. Water leak detected. Please check immediately."
@@ -49,19 +60,35 @@ blueprint:
 
 variables:
   people_var: !input people_to_check
+  speakers_var: !input speakers
+  # The target selector can hold entities, devices and areas, each as a string
+  # or a list; flatten all of it to a list of media_player entity IDs.
+  speaker_entities: >
+    {%- set ns = namespace(ids=[]) -%}
+    {%- for key in ['entity_id', 'device_id', 'area_id'] -%}
+      {%- set v = speakers_var.get(key, []) -%}
+      {%- for item in ([v] if v is string else v) -%}
+        {%- if key == 'entity_id' -%}{%- set ns.ids = ns.ids + [item] -%}
+        {%- elif key == 'device_id' -%}{%- set ns.ids = ns.ids + device_entities(item) -%}
+        {%- else -%}{%- set ns.ids = ns.ids + area_entities(item) -%}{%- endif -%}
+      {%- endfor -%}
+    {%- endfor -%}
+    {{ ns.ids | select('match', 'media_player\\.') | unique | list }}
 
-trigger:
-  - platform: state
+mode: single
+
+triggers:
+  # No "from: off": a sensor that comes back from "unavailable" straight into
+  # "on" (low battery, Zigbee blip) is still a leak and must alert.
+  - trigger: state
     entity_id: !input leak_sensor
     to: "on"
-    from: "off"
     for:
       seconds: 5
 
-action:
+actions:
   # 1. Run the custom actions you defined in the UI (Phones, SMS, etc.)
-  - choose: []
-    default: !input notification_actions
+  - sequence: !input notification_actions
 
   # 2. Check Presence & Play TTS
   - if:
@@ -69,8 +96,10 @@ action:
         value_template: >
           {{ expand(people_var) | selectattr('state', 'eq', 'home') | list | count > 0 }}
     then:
-      - service: tts.cloud_say
-        target: !input speakers
+      - action: tts.speak
+        target:
+          entity_id: !input tts_engine
         data:
+          media_player_entity_id: "{{ speaker_entities }}"
           cache: false
           message: !input tts_message
